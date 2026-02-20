@@ -5,7 +5,6 @@
 A comprehensive, interactive dashboard showcasing:
 • 8 ML models for loan eligibility prediction
 • Novel SWE (Smart Weighted Ensemble) algorithm
-• Novel HBTE (Hierarchical Bayesian Trust Ensemble) algorithm
 • Dataset exploration, model training, live predictions
 
 Author: Loan Eligibility Project
@@ -41,7 +40,6 @@ except ImportError:
     HAS_XGB = False
 
 from SmartWeightedEnsemble import SmartWeightedEnsemble
-from HierarchicalBayesianTrustEnsemble import HierarchicalBayesianTrustEnsemble
 
 warnings.filterwarnings("ignore")
 
@@ -204,8 +202,8 @@ def load_and_preprocess():
 
 
 @st.cache_resource
-def train_all_models(_X, _y, power=2.0, beta=2.0):
-    """Train 8 base models + SWE + HBTE and return results."""
+def train_all_models(_X, _y, power=2.0):
+    """Train 8 base models + SWE and return results."""
     X_train, X_temp, y_train, y_temp = train_test_split(
         _X, _y, test_size=0.3, random_state=42, stratify=_y
     )
@@ -227,23 +225,12 @@ def train_all_models(_X, _y, power=2.0, beta=2.0):
             random_state=42, use_label_encoder=False, eval_metric="logloss"
         )
 
-    # --- SWE --- (use deepcopy so each ensemble has independent model instances)
+    # --- SWE ---
     swe_models = deepcopy(models)
     swe = SmartWeightedEnsemble(swe_models, power=power, verbose=0)
     swe.fit(X_train.values, y_train.values, X_val.values, y_val.values)
     swe_pred, swe_conf = swe.predict(X_test.values, return_confidence=True)
     swe_proba = swe.predict_proba(X_test.values)
-
-    # --- HBTE --- (independent copy of models)
-    hbte_models = deepcopy(models)
-    hbte = HierarchicalBayesianTrustEnsemble(
-        hbte_models, beta=beta, prior_strength=10.0,
-        theta_high=0.80, theta_med=0.60, lambda_param=0.6,
-        online_learning=True, verbose=0,
-    )
-    hbte.fit(X_train.values, y_train.values, X_val.values, y_val.values)
-    hbte_pred, hbte_conf = hbte.predict(X_test.values, return_confidence=True)
-    hbte_proba = hbte.predict_proba(X_test.values)
 
     # Individual model results (use SWE's trained models for evaluation)
     individual = {}
@@ -267,14 +254,6 @@ def train_all_models(_X, _y, power=2.0, beta=2.0):
             proba=swe_proba,
             confidence=swe_conf,
             model=swe,
-        ),
-        hbte=dict(
-            accuracy=accuracy_score(y_test, hbte_pred),
-            auc=roc_auc_score(y_test, hbte_proba[:, 1]),
-            predictions=hbte_pred,
-            proba=hbte_proba,
-            confidence=hbte_conf,
-            model=hbte,
         ),
         splits=dict(X_train=X_train, X_val=X_val, X_test=X_test,
                      y_train=y_train, y_val=y_val, y_test=y_test),
@@ -302,7 +281,6 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### ⚙️ Hyperparameters")
     power = st.slider("SWE Power (β)", 1.0, 5.0, 2.0, 0.5)
-    beta = st.slider("HBTE Beta", 1.0, 5.0, 2.0, 0.5)
     st.markdown("---")
     st.caption("© 2026 · Loan Eligibility Project")
 
@@ -311,7 +289,7 @@ with st.sidebar:
 # Load data + models
 # ─────────────────────────────────────────────────────────────────────────────
 raw, data, X, y, le_map = load_and_preprocess()
-results = train_all_models(X, y, power=power, beta=beta)
+results = train_all_models(X, y, power=power)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -319,11 +297,11 @@ results = train_all_models(X, y, power=power, beta=beta)
 # ═══════════════════════════════════════════════════════════════════════════════
 if page == "🏠 Dashboard":
     st.markdown("# 🏦 Loan Eligibility Prediction")
-    st.markdown("##### Intelligent Credit Decision System using Machine Learning & Novel Ensemble Algorithms")
+    st.markdown("##### Intelligent Credit Decision System using Machine Learning & Novel Ensemble Algorithm")
     st.markdown("")
 
     # ── KPI row ──
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4 = st.columns(4)
     best_ind_name = max(results["individual"], key=lambda k: results["individual"][k]["accuracy"])
     best_ind_acc = results["individual"][best_ind_name]["accuracy"]
 
@@ -331,16 +309,15 @@ if page == "🏠 Dashboard":
     c2.metric("Features", f"{X.shape[1]}")
     c3.metric("Best Individual", f"{best_ind_acc:.2%}")
     c4.metric("SWE Accuracy", f"{results['swe']['accuracy']:.2%}")
-    c5.metric("HBTE Accuracy", f"{results['hbte']['accuracy']:.2%}")
 
     st.markdown("")
 
     # ── Accuracy comparison chart ──
-    names = list(results["individual"].keys()) + ["SWE ⭐", "HBTE ⭐"]
+    names = list(results["individual"].keys()) + ["SWE ⭐"]
     accs = [results["individual"][n]["accuracy"] for n in results["individual"]] + [
-        results["swe"]["accuracy"], results["hbte"]["accuracy"]
+        results["swe"]["accuracy"],
     ]
-    colors = [PALETTE[i % len(PALETTE)] for i in range(len(results["individual"]))] + ["#f5576c", "#43e97b"]
+    colors = [PALETTE[i % len(PALETTE)] for i in range(len(results["individual"]))] + ["#f5576c"]
 
     fig = go.Figure(go.Bar(
         x=names, y=accs,
@@ -359,14 +336,13 @@ if page == "🏠 Dashboard":
 
     # ── Feature boxes ──
     st.markdown("### ✨ Key Features")
-    f1, f2, f3, f4 = st.columns(4)
+    f1, f2, f3 = st.columns(3)
     features = [
         ("🧠", "8 ML Algorithms", "Logistic Regression, KNN, DT, RF, SVM, XGBoost, AdaBoost, Naïve Bayes"),
-        ("⚡", "SWE Ensemble", "Smart Weighted Ensemble with power-based dynamic weighting"),
-        ("🔬", "HBTE Ensemble", "Hierarchical Bayesian Trust Ensemble with convergence proof"),
+        ("⚡", "SWE Ensemble", "Smart Weighted Ensemble with power-based dynamic weighting & confidence scores"),
         ("🎯", "Live Prediction", "Enter applicant details and get real-time eligibility + confidence"),
     ]
-    for col, (icon, title, desc) in zip([f1, f2, f3, f4], features):
+    for col, (icon, title, desc) in zip([f1, f2, f3], features):
         col.markdown(
             f"""<div class="feature-box">
                     <h2 style="margin:0; font-size:2.2rem;">{icon}</h2>
@@ -441,7 +417,6 @@ elif page == "🤖 Model Training":
         for name, r in results["individual"].items():
             rows.append(dict(Model=name, Accuracy=r["accuracy"], AUC=r["auc"], Type="Individual"))
         rows.append(dict(Model="SWE ⭐", Accuracy=results["swe"]["accuracy"], AUC=results["swe"]["auc"], Type="Ensemble"))
-        rows.append(dict(Model="HBTE ⭐", Accuracy=results["hbte"]["accuracy"], AUC=results["hbte"]["auc"], Type="Ensemble"))
         df = pd.DataFrame(rows).sort_values("Accuracy", ascending=False).reset_index(drop=True)
         df.index += 1
 
@@ -477,11 +452,6 @@ elif page == "🤖 Model Training":
         fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines",
                                  name=f'SWE (AUC={results["swe"]["auc"]:.3f})',
                                  line=dict(color="#f5576c", width=3, dash="dash")))
-        # HBTE
-        fpr, tpr, _ = roc_curve(y_test, results["hbte"]["proba"][:, 1])
-        fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines",
-                                 name=f'HBTE (AUC={results["hbte"]["auc"]:.3f})',
-                                 line=dict(color="#43e97b", width=3, dash="dash")))
         # Diagonal
         fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
                                  line=dict(color="grey", dash="dot"), showlegend=False))
@@ -497,14 +467,12 @@ elif page == "🤖 Model Training":
     with tab3:
         model_pick = st.selectbox(
             "Select model for confusion matrix",
-            list(results["individual"].keys()) + ["SWE", "HBTE"],
+            list(results["individual"].keys()) + ["SWE"],
         )
         if model_pick in results["individual"]:
             preds = results["individual"][model_pick]["predictions"]
-        elif model_pick == "SWE":
-            preds = results["swe"]["predictions"]
         else:
-            preds = results["hbte"]["predictions"]
+            preds = results["swe"]["predictions"]
 
         cm = confusion_matrix(y_test, preds)
         fig = px.imshow(
@@ -537,37 +505,14 @@ elif page == "🤖 Model Training":
         styled_plotly(fig, 380)
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("### HBTE Trust Parameters (τₖ)")
-        hbte_model = results["hbte"]["model"]
-        t_df = pd.DataFrame({
-            "Model": list(hbte_model.trust_.keys()),
-            "Trust (τ)": list(hbte_model.trust_.values()),
-        }).sort_values("Trust (τ)", ascending=True)
-
-        fig = px.bar(
-            t_df, x="Trust (τ)", y="Model", orientation="h",
-            color="Trust (τ)", color_continuous_scale="Magma",
-            title="HBTE Bayesian Trust Parameters",
-        )
-        styled_plotly(fig, 380)
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Tier usage
-        tier_stats = hbte_model.get_tier_statistics()
-        if isinstance(tier_stats, dict) and "total_predictions" in tier_stats:
-            st.markdown("### HBTE Tier Usage")
-            tier_df = pd.DataFrame({
-                "Tier": ["Tier 1 (Top-3)", "Tier 2 (Top-5)", "Tier 3 (All-8)"],
-                "Count": [tier_stats["tier_1_count"], tier_stats["tier_2_count"], tier_stats["tier_3_count"]],
-                "Percent": [tier_stats["tier_1_pct"], tier_stats["tier_2_pct"], tier_stats["tier_3_pct"]],
-            })
-            fig = px.pie(
-                tier_df, values="Count", names="Tier", hole=0.5,
-                color_discrete_sequence=[PALETTE[4], PALETTE[1], PALETTE[3]],
-                title="Hierarchical Tier Selection Distribution",
-            )
-            styled_plotly(fig, 380)
-            st.plotly_chart(fig, use_container_width=True)
+        st.markdown("---")
+        st.markdown("### 📖 How Weights Are Calculated")
+        st.latex(r"w_k = \frac{\alpha_k^{\beta}}{\sum_{j=1}^{K} \alpha_j^{\beta}}")
+        st.markdown("""
+        - **α_k** = validation accuracy of model k
+        - **β** = power parameter (currently set to {:.1f} via sidebar)
+        - Higher β → more weight to the best model, less to weaker ones
+        """.format(power))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -621,39 +566,32 @@ elif page == "🔮 Live Prediction":
         x_arr = input_df.values
 
         swe_model = results["swe"]["model"]
-        hbte_model = results["hbte"]["model"]
 
         swe_pred, swe_conf = swe_model.predict(x_arr, return_confidence=True)
-        hbte_pred, hbte_conf = hbte_model.predict(x_arr, return_confidence=True)
         swe_proba = swe_model.predict_proba(x_arr)[0]
-        hbte_proba = hbte_model.predict_proba(x_arr)[0]
 
         st.markdown("---")
         st.markdown("### 🏆 Prediction Results")
 
-        rc1, rc2 = st.columns(2)
+        pred = swe_pred[0]
+        conf = swe_conf[0]
+        status = "✅ APPROVED" if pred == 1 else "❌ REJECTED"
+        colour = "#43e97b" if pred == 1 else "#f5576c"
 
-        for col, label, pred, conf, proba in [
-            (rc1, "SWE", swe_pred[0], swe_conf[0], swe_proba),
-            (rc2, "HBTE", hbte_pred[0], hbte_conf[0], hbte_proba),
-        ]:
-            status = "✅ APPROVED" if pred == 1 else "❌ REJECTED"
-            colour = "#43e97b" if pred == 1 else "#f5576c"
-            with col:
-                st.markdown(
-                    f"""<div style="background:linear-gradient(135deg,{colour}22,{colour}11);
-                            border-radius:16px;padding:28px;text-align:center;
-                            border:2px solid {colour}55;">
-                        <h3 style="margin:0;color:#2d3748;">{label} Ensemble</h3>
-                        <h1 style="margin:10px 0;background:none;-webkit-text-fill-color:{colour};
-                            font-size:2.2rem;">{status}</h1>
-                        <p style="font-size:1.1rem;color:#4a5568;">
-                            Confidence: <b>{conf:.1%}</b> &nbsp;|&nbsp;
-                            P(Approved): <b>{proba[1]:.1%}</b>
-                        </p>
-                    </div>""",
-                    unsafe_allow_html=True,
-                )
+        st.markdown(
+            f"""<div style="background:linear-gradient(135deg,{colour}22,{colour}11);
+                    border-radius:16px;padding:28px;text-align:center;
+                    border:2px solid {colour}55; max-width: 600px; margin: 0 auto;">
+                <h3 style="margin:0;color:#2d3748;">SWE Ensemble Prediction</h3>
+                <h1 style="margin:10px 0;background:none;-webkit-text-fill-color:{colour};
+                    font-size:2.2rem;">{status}</h1>
+                <p style="font-size:1.1rem;color:#4a5568;">
+                    Confidence: <b>{conf:.1%}</b> &nbsp;|&nbsp;
+                    P(Approved): <b>{swe_proba[1]:.1%}</b>
+                </p>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
         # Individual model votes
         st.markdown("### 🗳️ Individual Model Votes")
@@ -686,105 +624,96 @@ elif page == "🔮 Live Prediction":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif page == "📐 Algorithm Deep-Dive":
     st.markdown("# 📐 Algorithm Deep-Dive")
-    st.markdown("##### Understanding the mathematics behind SWE and HBTE")
+    st.markdown("##### Understanding the mathematics behind the Smart Weighted Ensemble (SWE)")
     st.markdown("")
 
-    tab1, tab2 = st.tabs(["⚡ Smart Weighted Ensemble (SWE)", "🔬 Hierarchical Bayesian Trust Ensemble (HBTE)"])
+    st.markdown("""
+    <div class="info-card">
+        <h4>⚡ Smart Weighted Ensemble (SWE)</h4>
+        <p>A novel, interpretable ensemble that combines 8 classifiers using
+        <b>performance-based dynamic weighting</b> and
+        <b>confidence quantification</b>.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    with tab1:
-        st.markdown("""
-        <div class="info-card">
-            <h4>⚡ Smart Weighted Ensemble (SWE)</h4>
-            <p>A simplified, interpretable ensemble that combines 8 classifiers using
-            <b>performance-based dynamic weighting</b> and
-            <b>confidence quantification</b>.</p>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("### 🔢 The 3 Core Formulas")
 
-        st.markdown("### 🔢 The 3 Core Formulas")
+    c1, c2, c3 = st.columns(3)
+    c1.latex(r"w_k = \frac{\alpha_k^{\beta}}{\sum_{j=1}^{K} \alpha_j^{\beta}}")
+    c1.caption("**Formula 1 — Weight Calculation**")
 
-        c1, c2, c3 = st.columns(3)
-        c1.latex(r"w_k = \frac{\alpha_k^{\beta}}{\sum_{j=1}^{K} \alpha_j^{\beta}}")
-        c1.caption("**Formula 1 — Weight Calculation**")
+    c2.latex(r"P(\text{Approved}|x) = \sum_{k=1}^{K} w_k \cdot P_k(\text{Approved}|x)")
+    c2.caption("**Formula 2 — Weighted Prediction**")
 
-        c2.latex(r"P(\text{Approved}|x) = \sum_{k=1}^{K} w_k \cdot P_k(\text{Approved}|x)")
-        c2.caption("**Formula 2 — Weighted Prediction**")
+    c3.latex(r"\text{Conf} = P_{\max} \times \frac{|\text{Agreed}|}{K}")
+    c3.caption("**Formula 3 — Confidence Score**")
 
-        c3.latex(r"\text{Conf} = P_{\max} \times \frac{|\text{Agreed}|}{K}")
-        c3.caption("**Formula 3 — Confidence Score**")
+    st.markdown("---")
 
-        st.markdown("---")
-        st.markdown("### 📊 How Power (β) Affects Weights")
+    # ── How SWE works step by step ──
+    st.markdown("### 🔄 How SWE Works — Step by Step")
 
-        # Interactive power demo
-        demo_accs = np.array([0.78, 0.82, 0.75, 0.88, 0.80, 0.86, 0.79, 0.73])
-        demo_names = ["LR", "KNN", "DT", "RF", "SVM", "XGB", "Ada", "NB"]
-        powers = np.arange(0.5, 5.5, 0.5)
-        frames = []
-        for p in powers:
-            w = demo_accs ** p
-            w = w / w.sum()
-            for n, ww in zip(demo_names, w):
-                frames.append(dict(Model=n, Weight=ww, Power=f"β={p:.1f}"))
-        pwr_df = pd.DataFrame(frames)
-        fig = px.bar(
-            pwr_df, x="Model", y="Weight", animation_frame="Power",
-            color="Model", color_discrete_sequence=PALETTE,
-            title="Effect of Power Parameter on Model Weights",
-        )
-        fig.update_layout(yaxis=dict(range=[0, 0.35]))
-        styled_plotly(fig, 450)
-        st.plotly_chart(fig, use_container_width=True)
+    st.markdown("""
+    **Step 1 — Train** all 8 base models on the training data.
 
-    with tab2:
-        st.markdown("""
-        <div class="info-card">
-            <h4>🔬 Hierarchical Bayesian Trust Ensemble (HBTE)</h4>
-            <p>An advanced ensemble with <b>Bayesian posterior updating of trust</b>,
-            <b>information-theoretic confidence</b>, <b>hierarchical 3-tier decisions</b>,
-            and a <b>formal convergence theorem (Theorem 1)</b>.</p>
-        </div>
-        """, unsafe_allow_html=True)
+    **Step 2 — Evaluate** each model on the validation set to get accuracy scores.
 
-        st.markdown("### 🧮 Key Equations")
+    **Step 3 — Calculate weights** using the power formula:
+    - Square each model's accuracy (with β=2)
+    - Divide by the sum of all squared accuracies
+    - Better models get proportionally MORE weight
 
-        st.markdown("**Bayesian Trust Update**")
-        st.latex(r"\tau_k(t{+}1) = \frac{s_k(t) + \alpha_k \cdot t_0}{s_k(t) + f_k(t) + t_0}")
+    **Step 4 — Predict** by combining all models' probabilities using their weights.
 
-        st.markdown("**Information-Theoretic Confidence**")
-        st.latex(r"\mathcal{C}(x) = 1 - \frac{H(x)}{\log 2}, \quad H(x) = -\sum_c \hat{p}_c \log \hat{p}_c")
+    **Step 5 — Confidence** is computed as: max probability × model agreement fraction.
+    """)
 
-        st.markdown("**Hierarchical Decision**")
-        st.latex(r"\Gamma(x) = \lambda\,\mathcal{C}(x) + (1-\lambda)\,A(x)")
+    st.markdown("---")
+    st.markdown("### 📊 How Power (β) Affects Weights")
 
-        st.markdown("---")
-        st.markdown("### 📜 Theorem 1 — Convergence Guarantee")
-        st.info(
-            "**Theorem 1 (HBTE Convergence):** As $t → ∞$, the trust parameters converge "
-            "almost surely: $\\tau_k(t) \\xrightarrow{a.s.} \\tau_k^* = \\rho_k / \\sum_j \\rho_j$, "
-            "where $\\rho_k$ is the true accuracy of model $M_k$."
-        )
+    # Interactive power demo
+    demo_accs = np.array([0.78, 0.82, 0.75, 0.88, 0.80, 0.86, 0.79, 0.73])
+    demo_names = ["LR", "KNN", "DT", "RF", "SVM", "XGB", "Ada", "NB"]
+    powers = np.arange(0.5, 5.5, 0.5)
+    frames = []
+    for p in powers:
+        w = demo_accs ** p
+        w = w / w.sum()
+        for n, ww in zip(demo_names, w):
+            frames.append(dict(Model=n, Weight=ww, Power=f"β={p:.1f}"))
+    pwr_df = pd.DataFrame(frames)
+    fig = px.bar(
+        pwr_df, x="Model", y="Weight", animation_frame="Power",
+        color="Model", color_discrete_sequence=PALETTE,
+        title="Effect of Power Parameter on Model Weights",
+    )
+    fig.update_layout(yaxis=dict(range=[0, 0.35]))
+    styled_plotly(fig, 450)
+    st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("---")
-        st.markdown("### 🏗️ Hierarchical Tier Architecture")
+    st.markdown("---")
 
-        tier_desc = pd.DataFrame({
-            "Tier": ["🟢 Tier 1", "🟡 Tier 2", "🔴 Tier 3"],
-            "Condition": ["Γ(x) ≥ 0.80", "0.60 ≤ Γ(x) < 0.80", "Γ(x) < 0.60"],
-            "Models Used": ["Top 3 trusted", "Top 5 trusted", "All 8 models"],
-            "Speed": ["⚡ Fastest", "⚡ Fast", "🕐 Thorough"],
-        })
-        st.table(tier_desc)
+    # ── Why SWE is Novel ──
+    st.markdown("### 🆚 Comparison with Other Ensemble Methods")
 
-        # Tier usage chart (if available)
-        tier_stats = results["hbte"]["model"].get_tier_statistics()
-        if isinstance(tier_stats, dict) and "total_predictions" in tier_stats:
-            fig = go.Figure(go.Funnel(
-                y=["Tier 1 — High Confidence", "Tier 2 — Medium", "Tier 3 — Low"],
-                x=[tier_stats["tier_1_count"], tier_stats["tier_2_count"], tier_stats["tier_3_count"]],
-                marker=dict(color=[PALETTE[4], PALETTE[1], PALETTE[3]]),
-                textinfo="value+percent total",
-            ))
-            fig.update_layout(title="Prediction Flow Through Tiers")
-            styled_plotly(fig, 360)
-            st.plotly_chart(fig, use_container_width=True)
+    comparison_df = pd.DataFrame({
+        "Method": ["Simple Voting", "Soft Voting", "Weighted Voting", "Stacking", "SWE (Ours) ⭐"],
+        "Weights": ["Equal", "Equal", "Fixed", "Learned (black-box)", "Dynamic (power-based)"],
+        "Confidence Score": ["❌", "❌", "❌", "❌", "✅"],
+        "Explainable": ["✅", "✅", "✅", "❌", "✅"],
+        "Novel": ["❌", "❌", "❌", "❌", "✅"],
+    })
+    st.table(comparison_df)
+
+    st.markdown("---")
+    st.markdown("### 🔑 What Makes SWE Novel?")
+    st.markdown("""
+    1. **Power-Weighted Formula** — Uses α² to amplify differences between models.
+       Unlike equal voting or fixed weights, SWE dynamically adapts based on validation accuracy.
+
+    2. **Confidence Quantification** — Unique formula combining prediction probability
+       with inter-model agreement. Most ensemble methods don't provide confidence scores.
+
+    3. **Full Explainability** — Every prediction can be traced back to individual
+       model votes and their weights. Critical for financial applications like loan approval.
+    """)

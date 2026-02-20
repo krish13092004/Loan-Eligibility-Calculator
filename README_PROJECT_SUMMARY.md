@@ -43,16 +43,10 @@
 
 ---
 
-### 📦 **BACKUP FILES (Optional - More Complex)**
+### 📦 **Additional Files**
 
-These were created first but are too complicated for final year project:
-
-- `HierarchicalBayesianTrustEnsemble.py` - Complex Bayesian version
-- `HBTE_Algorithm_Mathematical_Framework.md` - Advanced math (Theorem 1, proofs)
-- `HBTE_Usage_Example.py` - Usage for complex version
-- `AdaptiveWeightedEnsemble.py` - Earlier prototype
-
-**RECOMMENDATION**: You can delete these or keep as "advanced exploration" in appendix.
+- `EXPLANATION_SWE_Algorithm.md` - Detailed explanation of the SWE algorithm
+- `AdaptiveWeightedEnsemble.py` - Earlier prototype (for reference)
 
 ---
 
