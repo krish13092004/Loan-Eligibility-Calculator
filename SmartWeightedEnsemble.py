@@ -1,52 +1,11 @@
-"""
-Smart Weighted Ensemble (SWE) Algorithm
-========================================
 
-A simplified novel ensemble learning algorithm that combines 8 classifiers
-using adaptive performance-based weighting and confidence scoring.
-
-Author: [Your Name]
-Date: December 22, 2025
-For: Final Year Major Project - Loan Eligibility Prediction
-
-This is a SIMPLIFIED version that's easier to understand and explain!
-"""
 
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class SmartWeightedEnsemble(BaseEstimator, ClassifierMixin):
-    """
-    Smart Weighted Ensemble (SWE) - A Novel Simplified Algorithm
-    
-    This algorithm combines K base classifiers using:
-    1. Performance-based dynamic weighting (α^power formula)
-    2. Prediction confidence scoring
-    3. Model agreement analysis
-    
-    Parameters:
-    -----------
-    models : dict
-        Dictionary of {model_name: model_instance}
-    
-    power : float, default=2.0
-        Exponent for weight calculation (higher = more weight to best models)
-    
-    confidence_threshold : float, default=0.75
-        Threshold for high-confidence predictions (0-1)
-    
-    verbose : int, default=1
-        Verbosity level (0=silent, 1=progress)
-    
-    Key Features:
-    -------------
-    - Simple to understand and implement
-    - Weights based on validation accuracy
-    - Provides confidence scores for predictions
-    - Shows which models agree/disagree
-    """
-    
+   
     def __init__(self, models, power=2.0, confidence_threshold=0.75, verbose=1):
         self.models = models
         self.power = power
@@ -54,15 +13,6 @@ class SmartWeightedEnsemble(BaseEstimator, ClassifierMixin):
         self.verbose = verbose
         
     def fit(self, X, y, X_val=None, y_val=None):
-        """
-        Train all models and calculate weights based on accuracy.
-        
-        Weight Formula:
-        ---------------
-        weight_k = (accuracy_k ^ power) / Σ(accuracy_j ^ power)
-        
-        This gives higher weight to better-performing models.
-        """
         X, y = check_X_y(X, y)
         self.classes_ = np.unique(y)
         
@@ -123,13 +73,6 @@ class SmartWeightedEnsemble(BaseEstimator, ClassifierMixin):
         return self
     
     def predict_proba(self, X):
-        """
-        Predict probabilities using weighted combination.
-        
-        Formula:
-        --------
-        P(class=1|x) = Σ(weight_k × P_k(class=1|x)) / Σ(weight_k)
-        """
         check_is_fitted(self, ['weights_'])
         X = check_array(X)
         
@@ -148,15 +91,6 @@ class SmartWeightedEnsemble(BaseEstimator, ClassifierMixin):
         return weighted_probs / total_weight
     
     def predict(self, X, return_confidence=False):
-        """
-        Make predictions with optional confidence scores.
-        
-        Confidence Score:
-        -----------------
-        confidence = max(probability) × model_agreement
-        
-        Where model_agreement = fraction of models agreeing with prediction
-        """
         proba = self.predict_proba(X)
         predictions = self.classes_[np.argmax(proba, axis=1)]
         
@@ -180,17 +114,6 @@ class SmartWeightedEnsemble(BaseEstimator, ClassifierMixin):
         return predictions
     
     def explain_prediction(self, X, idx=0):
-        """
-        Explain how the ensemble made a prediction for a sample.
-        
-        Returns:
-        --------
-        Dictionary with:
-        - final_prediction: Ensemble decision
-        - confidence: Confidence score (0-1)
-        - individual_votes: Each model's prediction
-        - is_high_confidence: Whether confidence exceeds threshold
-        """
         check_is_fitted(self, ['weights_'])
         X = check_array(X)
         
@@ -223,11 +146,6 @@ class SmartWeightedEnsemble(BaseEstimator, ClassifierMixin):
         }
     
     def get_model_rankings(self):
-        """
-        Get models ranked by their weights.
-        
-        Returns list of (model_name, weight, accuracy) tuples.
-        """
         check_is_fitted(self, ['weights_'])
         
         rankings = []

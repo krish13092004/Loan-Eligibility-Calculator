@@ -4,45 +4,14 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.metrics import accuracy_score
 
 class AdaptiveWeightedEnsemble(BaseEstimator, ClassifierMixin):
-    """
-    A Novel Ensemble Algorithm: Adaptive Confidence-Weighted Ensemble (ACWE)
-    
-    This algorithm improves upon standard voting classifiers by:
-    1. Dynamically calculating model weights based on validation performance (Power-weighted)
-    2. Integrating prediction confidence into the decision process
-    3. Providing interpretability through 'Confidence Scores'
-    
-    It combines 8 different base classifiers:
-    - Logistic Regression (Linear)
-    - KNN (Instance-based)
-    - Decision Tree (Rule-based)
-    - Random Forest (Bagging)
-    - SVM (Kernel-based)
-    - XGBoost (Gradient Boosting)
-    - AdaBoost (Adaptive Boosting)
-    - Naive Bayes (Probabilistic)
-    """
     
     def __init__(self, models):
-        """
-        Parameters:
-        -----------
-        models : dict
-            Dictionary of instantiated classifiers aka the 8 algorithms
-            Format: {'ModelName': model_instance}
-        """
         self.models = models
         self.weights_ = {}
         self.best_model_name_ = ""
         self.best_model_score_ = 0.0
         
     def fit(self, X, y, X_val=None, y_val=None):
-        """
-        Fit all models and calculate adaptive weights.
-        
-        If X_val and y_val are provided, weights are optimized based on validation set.
-        Otherwise, weights are based on training score (less optimal due to overfitting risk).
-        """
         # Validations
         X, y = check_X_y(X, y)
         self.classes_ = np.unique(y)
@@ -74,9 +43,6 @@ class AdaptiveWeightedEnsemble(BaseEstimator, ClassifierMixin):
         return self
         
     def predict_proba(self, X):
-        """
-        Returns weighted probability estimates for the ensemble.
-        """
         check_is_fitted(self, ['weights_'])
         X = check_array(X)
         
@@ -93,20 +59,10 @@ class AdaptiveWeightedEnsemble(BaseEstimator, ClassifierMixin):
         return weighted_probas / total_weight
     
     def predict(self, X):
-        """
-        Predict class labels for X.
-        """
         probas = self.predict_proba(X)
         return self.classes_[np.argmax(probas, axis=1)]
     
     def get_confidence_score(self, X):
-        """
-        Calculates a 'Confidence Score' for each prediction.
-        
-        Score is a combination of:
-        1. Probability Strength: How strong is the weighted probability?
-        2. Model Agreement: What % of models agree with the final decision?
-        """
         # 1. Probability Strength
         probas = self.predict_proba(X)
         prob_strength = np.max(probas, axis=1)
@@ -128,9 +84,6 @@ class AdaptiveWeightedEnsemble(BaseEstimator, ClassifierMixin):
         return confidence
 
     def explain_prediction(self, X, sample_index=0):
-        """
-        Returns a text explanation of why a specific sample was classified this way.
-        """
         X_sample = X[sample_index].reshape(1, -1)
         pred = self.predict(X_sample)[0]
         conf = self.get_confidence_score(X_sample)[0]
