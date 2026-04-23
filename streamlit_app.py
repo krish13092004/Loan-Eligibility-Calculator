@@ -195,9 +195,16 @@ def load_and_preprocess():
     X = data.drop(["Loan_Status", "Loan_ID", "ApplicantIncome", "CoapplicantIncome"], axis=1, errors="ignore")
     y = data["Loan_Status"]
 
-    # Dependents column: convert '3+' → 3
-    if X["Dependents"].dtype == object:
-        X["Dependents"] = X["Dependents"].replace("3+", 3).astype(int)
+    # Dependents column: convert '3+' -> 3 and handle any remaining strings
+    X["Dependents"] = X["Dependents"].astype(str).replace("3+", "3")
+    X["Dependents"] = pd.to_numeric(X["Dependents"], errors='coerce').fillna(0).astype(int)
+
+    # Ensure all columns in X are numeric
+    for col in X.columns:
+        X[col] = pd.to_numeric(X[col], errors='coerce').fillna(0)
+
+    # Ensure y is numeric
+    y = pd.to_numeric(y, errors='coerce').fillna(0).astype(int)
 
     return raw, data, X, y, le_map
 
